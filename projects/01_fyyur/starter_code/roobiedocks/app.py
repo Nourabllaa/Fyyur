@@ -13,41 +13,26 @@ from flask_wtf import Form
 from forms import *
 from flask_migrate import Migrate 
 import sys 
+
 #----------------------------------------------------------------------------#
 # App Config.
 #----------------------------------------------------------------------------#
+
 
 app = Flask(__name__)
 moment = Moment(app)
 app.config.from_object('config')
 db = SQLAlchemy(app)
+migrate = Migrate(app, db, compare_type=True)
+
 
 # TODO: connect to a local postgresql database
-migrat= Migrate(app, db )
+
 
 
 #----------------------------------------------------------------------------#
 # Models.
 #----------------------------------------------------------------------------#
-
-
-
-   # TODO: implement any missing fields, as a database migration using Flask-Migrate
-
-class Artist(db.Model):
-    __tablename__ = 'artists'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String)
-    city = db.Column(db.String())
-    state = db.Column(db.String())
-    phone = db.Column(db.String())
-    genres = db.Column(db.String())
-    image_link = db.Column(db.String(500))
-    facebook_link = db.Column(db.String())
-    seeking_venue= db.Column(db.Boolean, nullable=False , default=False)
-    shows = db.relationship('Show', backref='artist_shows', lazy=True, cascade='all, delete')
-
-
 class Venue(db.Model):
     __tablename__ = 'venues'
     id = db.Column(db.Integer, primary_key=True)
@@ -63,25 +48,34 @@ class Venue(db.Model):
     genres = db.Column(db.String())
     website = db.Column(db.String())
     shows = db.relationship('Show', backref='venue_shows', lazy=True, cascade='all, delete')
+    #shows= db.query(Venue).join(Show, Venue.id==Show.venue_id)
 
 
-
-
-   
-
-
-    # TODO: implement any missing fields, as a database migration using Flask-Migrate
-
-
-
-# TODO Implement Show and Artist models, and complete all model relationships and properties, as a database migration.
-class Show(db.Model):
-    __tablename__= 'show'
+class Artist(db.Model):
+    __tablename__ = 'artists'
     id = db.Column(db.Integer, primary_key=True)
-    artist_id = db.Column(db.Integer, db.ForeignKey('artists.id', ondelete='CASCADE'), nullable=False)
-    venue_id = db.Column(db.Integer, db.ForeignKey('venues.id', ondelete='CASCADE'), nullable=False)
-    start_time = db.Column(db.DateTime, nullable=False)
+    name = db.Column(db.String)
+    city = db.Column(db.String())
+    state = db.Column(db.String())
+    phone = db.Column(db.String())
+    genres = db.Column(db.String())
+    image_link = db.Column(db.String(500))
+    facebook_link = db.Column(db.String())
+    website = db.Column(db.String())
+    seeking_venue= db.Column(db.Boolean, nullable=False , default=False)
+    seeking_description = db.Column(db.String())
+    shows = db.relationship('Show', backref='artist_shows', lazy=True, cascade='all, delete')
+    #shows= db.query(Artist).join(Show, Artist.id==Show.artist_id)
+ 
 
+
+class Show(db.Model):
+   __tablename__= 'show'
+   id = db.Column(db.Integer, primary_key=True)
+   artist_id = db.Column(db.Integer, db.ForeignKey('artists.id', ondelete='CASCADE'), nullable=False)
+   venue_id = db.Column(db.Integer, db.ForeignKey('venues.id', ondelete='CASCADE'), nullable=False)
+   start_time = db.Column(db.DateTime, nullable=False)
+ 
 
 #----------------------------------------------------------------------------#
 # Filters.
@@ -169,7 +163,7 @@ def show_venue(venue_id):
       "artist_id": show.artist_id,
       "artist_name": Artist.query.get(my_artest).name,
       "artist_image_link": Artist.query.get(my_artest).image_link,
-      "start_time": show.start_time,
+      "start_time": str(show.start_time),
     }
     past_shows.append(past_record)
   else:
@@ -229,12 +223,22 @@ def create_venue_submission():
     venue.city = request.form.get('city')
     venue.state = request.form.get('state')
     venue.phone =request.form.get('phone')
+    venue.address =request.form.get('address')
     genres = request.form.getlist('genres')
     result = ''
     for gen in genres:
       result+','+gen
     venue.genres=genres
     venue.facebook_link = request.form.get('facebook_link')
+    y_or_n=request.form.get('seeking_talent')
+    if y_or_n == "y":
+      venue.seeking_talent=True
+    else:
+      venue.seeking_talent =False
+    venue.seeking_description = request.form.get('seeking_description')
+    venue.website = request.form.get('website')
+    venue.facebook_link = request.form.get('facebook_link')
+    venue.image_link = request.form.get('image_link')
     db.session.add(venue)
     db.session.commit()
   except:
@@ -328,7 +332,7 @@ def show_artist(artist_id):
       "venue_id": my_venue,
       "venue_name": Venue.query.get(my_venue).name,
       "venue_image_link": Venue.query.get(my_venue).image_link,
-      "start_time": show.start_time,
+      "start_time": str(show.start_time),
     }
        past_shows.append(past_record)
      else:
@@ -349,10 +353,12 @@ def show_artist(artist_id):
     "state": my_artist.state,
     "phone": my_artist.phone,
     "seeking_venue": my_artist.seeking_venue,
+    "seeking_description": my_artist.seeking_description,
     "image_link":  my_artist.image_link,
+    "facebook_link":my_artist.facebook_link,
+    "website":  my_artist.website,
     "past_shows": past_shows,
     "upcoming_shows": upcoming_shows,
-   
     "past_shows_count": past_count,
     "upcoming_shows_count": upcoming_count,
   }
@@ -375,6 +381,8 @@ def edit_artist(artist_id):
     "state": my_artist.state,
     "phone": my_artist.phone,
     "seeking_venue": my_artist.seeking_venue,
+    "seeking_description": my_artist.seeking_description,
+    "website": my_artist.website,
     "image_link":  my_artist.image_link,
     "facebook_link": my_artist.facebook_link,
     
@@ -396,12 +404,13 @@ def edit_artist_submission(artist_id):
       my_artists.city = form.city.data
       my_artists.state = form.state.data
       my_artists.website=form.website.data
-      my_artists.seeking_venue= form.seeking_talent.data
+      my_artists.seeking_venue= form.seeking_venue.data
       my_artists.seeking_description= form.seeking_description.data
       my_artists.image_link= form.image_link.data
       my_artists.genres =  form.genres.data
       my_artists.facebook_link =form.facebook_link.data
       my_artists.update()
+      db.session.update(my_artists)
       db.session.commit()
     except:
       error = True
@@ -446,9 +455,10 @@ def edit_venue_submission(venue_id):
       my_venue.seeking_talent= request.form.get('seeking_talent')
       my_venue.seeking_description= request.form.get('seeking_description')
       my_venue.image_link= request.form.get('image_link')
-      my_venue.genres =  request.form.get('genres')
+      my_venue.genres =  request.form.getlist('genres')
       my_venue.facebook_link =request.form.get('facebook_link')
       my_venue.update()
+      db.session.update(my_venue)
       db.session.commit()
     except:
       error = True
@@ -483,13 +493,25 @@ def create_artist_submission():
     artist.name = request.form.get('name')
     artist.city = request.form.get('city')
     artist.state = request.form.get('state')
+    genres =request.form.getlist('genres')
     artist.phone =request.form.get('phone')
-    genres = request.form.getlist('genres')
+    artist.website = request.form.get('website')
+    y_or_n= request.form.get('seeking_venue')
+
+    if y_or_n == "y":
+      artist.seeking_talent=True
+    else:
+      artist.seeking_talent =False
+    
+    artist.seeking_description = request.form.get('seeking_description')
+    artist.image_link = request.form.get('image_link')
+
     result = ''
     for gen in genres:
       result+','+gen
     artist.genres=result
     artist.facebook_link = request.form.get('facebook_link')
+
     db.session.add(artist)
     db.session.commit()
   except:
